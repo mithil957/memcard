@@ -24,7 +24,7 @@
 
 3. **Start Service**
     ```bash
-    # From the root directory (`pdf_to_flashcards_tool`)
+    # From the root directory `memcard`
     docker compose build
     docker compose up -d
     ```
