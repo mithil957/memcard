@@ -14,7 +14,7 @@
 1. **Clone Repo**
     ```bash
     git clone https://github.com/mithil957/memcard.git
-    cd pdf_to_flashcards_tool
+    cd memcard
     ```
 
 2. **Configure Environment Vars**
