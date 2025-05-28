@@ -60,29 +60,6 @@ class HttpRequest:
         False,
       )
     
-    def CheckParity(
-        self,
-        binary_str: str,extra_string: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.HTTPRequest:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      return self.__runtime.build_request_sync(
-        "CheckParity",
-        {
-          "binary_str": binary_str,"extra_string": extra_string,
-        },
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-        False,
-      )
-    
     def ChunkSegment(
         self,
         instruction_text: str,demos: List[types.DemoExample],input_segment: types.SegmentRaw,
@@ -317,29 +294,6 @@ class HttpStreamRequest:
         "CheckMergeAcrossPageBreak",
         {
           "context_before_page_break": context_before_page_break,"context_after_page_break": context_after_page_break,
-        },
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-        True,
-      )
-    
-    def CheckParity(
-        self,
-        binary_str: str,extra_string: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.HTTPRequest:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      return self.__runtime.build_request_sync(
-        "CheckParity",
-        {
-          "binary_str": binary_str,"extra_string": extra_string,
         },
         self.__ctx_manager.get(),
         tb,
