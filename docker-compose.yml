@@ -1,0 +1,148 @@
+services:
+  frontend:
+    build:
+      context: ./flashcard-tool-ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./flashcard-tool-ui:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - WATCHPACK_POLLING=true
+      - NEXT_PUBLIC_POCKETBASE_URL=http://localhost:8090
+
+  pocketbase:
+    build:
+      context: ./pocketbase_files
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./pocketbase_files:/app
+      - pocketbase_data:/pb/pb_data
+    restart: unless-stopped
+    command: ["air", "-c", ".air.toml"]
+    environment:
+      - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-admin@mail.com}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-password1}
+      - TEMPORAL_BOT_EMAIL=${TEMPORAL_BOT_EMAIL:-tempbot@memcard.com}
+      - TEMPORAL_BOT_PASSWORD=${TEMPORAL_BOT_PASSWORD:-password2}
+      - INTERNAL_API_URL=http://fastapi_api:5000
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  qdrant_init:
+    build:
+      context: ./temporal-project
+      dockerfile: Dockerfile
+    command: [ "python", "init_qdrant.py" ]
+    volumes:
+      - ./temporal-project:/app
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+    depends_on:
+      qdrant:
+        condition: service_started
+
+  postgresql:
+    image: postgres:15-bookworm
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-temporal}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-temporal}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres} 
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgresql_init_scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  temporal_server:
+    image: temporalio/auto-setup:latest
+    ports:
+      - "7233:7233"
+      - "8233:8233"
+    environment:
+      - DB=postgres12
+      - SKIP_SCHEMA_SETUP=false
+      - SKIP_DB_CREATE=false
+
+      # --- PostgreSQL Connection Details ---
+      - DB_PORT=5432                              
+      - POSTGRES_SEEDS=postgresql           
+      - POSTGRES_USER=${POSTGRES_USER:-temporal}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD:-temporal}
+
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    environment:
+      - TEMPORAL_ADDRESS=temporal_server:7233
+    ports:
+      - "8080:8080"
+    depends_on:
+      - temporal_server
+
+  fastapi_api:
+    build:
+      context: ./temporal-project
+    command: [ "uvicorn", "fastapi_server:app", "--host", "0.0.0.0", "--port", "5000" ]
+    volumes:
+      - ./temporal-project:/app
+    ports:
+      - "5001:5000"
+    environment:
+      - TEMPORAL_SERVER_URL=temporal_server:7233
+      - POCKETBASE_URL=http://pocketbase:8090
+      - PB_APP_USER_EMAIL=${TEMPORAL_BOT_EMAIL:-tempbot@memcard.com}
+      - PB_APP_USER_PASSWORD=${TEMPORAL_BOT_PASSWORD:-password2}
+      - QDRANT_URL=http://qdrant:6333
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - temporal_server
+      - pocketbase
+      - qdrant
+    restart: unless-stopped
+
+  temporal_worker:
+    build:
+      context: ./temporal-project
+      dockerfile: Dockerfile
+    command: [ "python", "run_worker.py" ]
+    volumes:
+      - ./temporal-project:/app
+    environment:
+      - TEMPORAL_SERVER_URL=temporal_server:7233
+      - POCKETBASE_URL=http://pocketbase:8090
+      - PB_APP_USER_EMAIL=${TEMPORAL_BOT_EMAIL:-tempbot@memcard.com}
+      - PV_APP_USER_PASSWORD=${TEMPORAL_BOT_PASSWORD:-password2}
+      - QDRANT_URL=http://qdrant:6333
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - temporal_server
+      - pocketbase
+      - qdrant
+    restart: unless-stopped
+
+volumes:
+  pocketbase_data:
+  qdrant_data:
+  postgres_data:
