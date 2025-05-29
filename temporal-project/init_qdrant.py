@@ -9,7 +9,11 @@ async def setup_qdrant():
     print("Starting Qdrant collection setup...")
     client = await get_qdrant_client()
     try:
-        await client.recreate_collection(
+
+        if await client.collection_exists(collection_name=VECTORS_FOR_PB_DATA):
+            return
+
+        await client.create_collection(
             collection_name=VECTORS_FOR_PB_DATA,
             vectors_config=models.VectorParams(
                 size=768, distance=models.Distance.DOT),
