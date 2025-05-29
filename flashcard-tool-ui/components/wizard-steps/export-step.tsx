@@ -5,14 +5,24 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { CheckCircle, Copy } from "lucide-react";
+import { CheckCircle, Copy, Download } from "lucide-react"; // Added Download icon
 import { toast } from "@/components/ui/use-toast";
 
 interface ExportStepProps {
   flashcards: Array<{ question: string; answer: string; id: string }>;
 }
 
-// Format flashcards for Obsidian
+const escapeCsvField = (field: string): string => {
+  if (field === null || field === undefined) {
+    return "";
+  }
+  const stringField = String(field);
+  if (stringField.includes(",") || stringField.includes("\n") || stringField.includes('"')) {
+    return `"${stringField.replace(/"/g, '""')}"`;
+  }
+  return stringField;
+};
+
 const formatForObsidian = (
   flashcards: Array<{ question: string; answer: string; id: string }>,
 ) => {
@@ -21,13 +31,8 @@ const formatForObsidian = (
     .join("\n\n");
 };
 
-// Format flashcards for Anki
-const formatForAnki = (
-  flashcards: Array<{ question: string; answer: string; id: string }>,
-) => {
-  return flashcards
-    .map((card) => `${card.question}; ${card.answer}`)
-    .join("\n");
+const formatRowForAnkiCsv = (card: { question: string; answer: string }): string => {
+  return `${escapeCsvField(card.question)},${escapeCsvField(card.answer)}`;
 };
 
 export default function ExportStep({ flashcards }: ExportStepProps) {
@@ -37,20 +42,26 @@ export default function ExportStep({ flashcards }: ExportStepProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyToClipboard = async () => {
-    const formattedText =
-      exportFormat === "obsidian"
-        ? formatForObsidian(flashcards)
-        : formatForAnki(flashcards);
+    // For Obsidian, clipboard is the primary action
+    if (exportFormat !== "obsidian") {
+        toast({
+            title: "Action Not Applicable",
+            description: "Copy to clipboard is configured for Obsidian format in this setup.",
+            variant: "default"
+        });
+        return;
+    }
+
+    const formattedText = formatForObsidian(flashcards);
 
     try {
       await navigator.clipboard.writeText(formattedText);
       setCopied(true);
       toast({
         title: "Copied to clipboard",
-        description: `Flashcards copied in ${exportFormat === "obsidian" ? "Obsidian" : "Anki"} format.`,
+        description: "Flashcards copied in Obsidian format.",
       });
 
-      // Reset copied state after 2 seconds
       setTimeout(() => {
         setCopied(false);
       }, 2000);
@@ -61,6 +72,27 @@ export default function ExportStep({ flashcards }: ExportStepProps) {
         variant: "destructive",
       });
     }
+  };
+
+  const handleDownloadAnkiCsv = () => {
+    if (exportFormat !== "anki") return;
+
+    const csvContent = flashcards.map(formatRowForAnkiCsv).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "anki_flashcards.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url); 
+
+    toast({
+      title: "Download Started",
+      description: "Anki CSV file download has started.",
+    });
   };
 
   return (
@@ -94,7 +126,6 @@ export default function ExportStep({ flashcards }: ExportStepProps) {
           </div>
         </Label>
 
-        {/* Anki Option */}
         <Label
           htmlFor="anki"
           className={`flex flex-col items-center justify-center p-6 border-2 rounded-lg cursor-pointer transition-all
@@ -115,18 +146,31 @@ export default function ExportStep({ flashcards }: ExportStepProps) {
       </RadioGroup>
 
       <div className="flex flex-col space-y-3">
-        <Button
-          onClick={handleCopyToClipboard}
-          className="w-full text-lg py-6"
-          variant="outline"
-        >
-          {copied ? (
-            <CheckCircle className="mr-2 h-5 w-5 text-green-500" />
-          ) : (
-            <Copy className="mr-2 h-5 w-5" />
-          )}
-          {copied ? "Copied!" : "Copy to Clipboard"}
-        </Button>
+        {exportFormat === "obsidian" && (
+          <Button
+            onClick={handleCopyToClipboard}
+            className="w-full text-lg py-6"
+            variant="outline"
+          >
+            {copied ? (
+              <CheckCircle className="mr-2 h-5 w-5 text-green-500" />
+            ) : (
+              <Copy className="mr-2 h-5 w-5" />
+            )}
+            {copied ? "Copied for Obsidian!" : "Copy for Obsidian"}
+          </Button>
+        )}
+
+        {exportFormat === "anki" && (
+          <Button
+            onClick={handleDownloadAnkiCsv}
+            className="w-full text-lg py-6"
+            variant="outline" // Or any other variant you prefer
+          >
+            <Download className="mr-2 h-5 w-5" />
+            Download Anki CSV
+          </Button>
+        )}
       </div>
     </div>
   );
