@@ -8,6 +8,8 @@ from functools import reduce
 
 with workflow.unsafe.imports_passed_through():
     from activity.extract_highlights_activites import (
+        check_if_pdf_already_processed,
+        delete_all_old_highlights,
         extract_and_save_highlights
     )
 
@@ -67,7 +69,7 @@ class GenerateFlashcardsParameters:
 @workflow.defn
 class GenerateFlashcardsWorkflow:
     @workflow.run
-    async def run(self, job_parameters: GenerateFlashcardsParameters) -> None:
+    async def run(self, job_parameters: GenerateFlashcardsParameters) -> str:
         workflow.logger.info(
             f"Starting generate flashcards job for {job_parameters.job_record_id}")
 
@@ -85,10 +87,89 @@ class GenerateFlashcardsWorkflow:
             retry_policy=one_shot
         )
 
+        # Check if duplicate
+        processed_pdf_id = await workflow.start_activity(
+            check_if_pdf_already_processed,
+            job_record['source_pdf'],
+            start_to_close_timeout=short_timeout,
+            retry_policy=one_shot
+        )
+
+        if processed_pdf_id is not None:
+            workflow.logger.info(f"Duplicate PDF found - {job_parameters.job_record_id} - {processed_pdf_id}")
+            workflow.logger.info(f"Flashcard generation starts - {job_parameters.job_record_id}")
+            await workflow.start_activity(
+                delete_all_old_highlights,
+                processed_pdf_id,
+                start_to_close_timeout=short_timeout,
+                retry_policy=one_shot
+            )
+
+            await workflow.start_activity(
+                extract_and_save_highlights,
+                (job_record['source_pdf'], processed_pdf_id),
+                start_to_close_timeout=short_timeout,
+                retry_policy=one_shot
+            )
+
+            await workflow.start_activity(
+                set_job_request_status,
+                (job_record['id'], "Highlight Extraction"),
+                start_to_close_timeout=short_timeout,
+                retry_policy=one_shot
+            )
+
+            highlights = await workflow.start_activity(
+                get_all_highlights,
+                processed_pdf_id,
+                schedule_to_close_timeout=short_timeout,
+                retry_policy=few_shot
+            )
+
+            highlight_vector_fetch_handles = []
+            
+            for highlight in highlights:
+                handle = workflow.start_activity(
+                    get_matches_for_highlight, 
+                    highlight,
+                    schedule_to_close_timeout=short_timeout,
+                    retry_policy=few_shot
+                )
+                highlight_vector_fetch_handles.append(handle)
+            
+            all_matches = await gather(*highlight_vector_fetch_handles)
+
+            groups = transform_matches_into_groups(all_matches)
+
+            flashcard_generate_handles = []
+            for selected_group in groups:
+                handle = workflow.start_activity(
+                    generate_and_save_flashcards_from_group,
+                    (
+                        (job_record['id'], job_record['source_pdf'], job_record['user']), # Here we can save the flashcards with the new PDF id
+                        selected_group
+                    ),
+                    start_to_close_timeout=medium_timeout,
+                    retry_policy=few_shot
+                )
+                flashcard_generate_handles.append(handle)
+            
+            await gather(*flashcard_generate_handles) 
+
+            await workflow.start_activity(
+                set_job_request_status,
+                (job_record['id'], "Finished"),
+                start_to_close_timeout=short_timeout,
+                retry_policy=one_shot
+            )
+
+            return "Workflow done - Skipped steps because duplicate found"
+
+
         # Extract and save highlights of the PDF
         await workflow.start_activity(
             extract_and_save_highlights, 
-            job_record['source_pdf'],
+            (job_record['source_pdf'], job_record['source_pdf']),
             start_to_close_timeout=short_timeout,
             retry_policy=one_shot
         )
@@ -368,6 +449,6 @@ class GenerateFlashcardsWorkflow:
         )
 
         workflow.logger.info(f"Flashcard generation finished - {job_parameters.job_record_id}")
-
+        return "Workflow done"
 
 

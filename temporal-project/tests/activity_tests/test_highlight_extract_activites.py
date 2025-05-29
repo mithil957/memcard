@@ -12,7 +12,7 @@ from tests.test_setup_cleanup_fixture import (
 async def test_highlight_extraction_activites(run_around_tests):
     env = ActivityEnvironment()
     source_pdf_id = "5u67g97440v3x03"
-    await env.run(extract_and_save_highlights, source_pdf_id)
+    await env.run(extract_and_save_highlights, (source_pdf_id, source_pdf_id))
 
     highlights: list[PdfHighlightsRecord] = await get_all_records(PDF_HIGHLIGHTS, options={
         'filter': f"user_pdf='{source_pdf_id}'"

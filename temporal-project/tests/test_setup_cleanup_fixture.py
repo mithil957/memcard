@@ -7,7 +7,8 @@ from database.database_utils import (
 )
 from database.database_models import (
     PDF_HIGHLIGHTS, 
-    PDF_CHUNKS, PDF_SEGMENTS, PDF_TOPICS, PDF_SUMMARY,
+    PDF_CHUNKS, PDF_SEGMENTS, PDF_TOPICS, PDF_SUMMARY, 
+    FLASHCARDS_STORE,
     VECTORS_FOR_PB_DATA,
 
 )
@@ -27,7 +28,7 @@ def run_around_tests():
 async def test_delete_all_records():
     collection_names = [
         PDF_CHUNKS, PDF_HIGHLIGHTS, PDF_SEGMENTS, PDF_SUMMARY,
-        PDF_TOPICS
+        PDF_TOPICS, FLASHCARDS_STORE
     ]
 
     for target_collection in collection_names:

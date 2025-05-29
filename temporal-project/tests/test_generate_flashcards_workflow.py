@@ -8,6 +8,8 @@ from activity.util_activites import (
 )
 
 from activity.extract_highlights_activites import (
+    check_if_pdf_already_processed,
+    delete_all_old_highlights,
     extract_and_save_highlights
 )
 
@@ -67,6 +69,8 @@ async def test_generate_flashcards_workflow():
                 # Utils
                 set_job_request_status,
                 # Highlights
+                check_if_pdf_already_processed,
+                delete_all_old_highlights,
                 extract_and_save_highlights,
                 # Segmentation
                 fetch_job_record,
