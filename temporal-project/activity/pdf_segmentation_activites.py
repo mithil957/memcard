@@ -122,9 +122,15 @@ async def fetch_pdf_and_split_into_image_strs(job_record: JobRequestsRecord) -> 
 
     for page_indx in range(0, num_pages, 2):
         curr_page_idx, next_page_idx = page_indx, page_indx + 1
-        page_img_curr = get_page_image_from_pdf(document, curr_page_idx)
-        page_img_next = get_page_image_from_pdf(document, next_page_idx)
-        combined_page_image = combine_page_images(page_img_curr, page_img_next)
+        if next_page_idx < num_pages:
+            page_img_curr = get_page_image_from_pdf(document, curr_page_idx)
+            page_img_next = get_page_image_from_pdf(document, next_page_idx)
+            combined_page_image = combine_page_images(page_img_curr, page_img_next)
+        else:
+            # When the number of pages is even
+            page_img_curr = get_page_image_from_pdf(document, curr_page_idx)
+            combined_page_image = page_img_curr
+
         filename_suffix = f"page_{curr_page_idx}_{next_page_idx}.json"
         tmp_file_path = os.path.join(base_job_temp_dir, filename_suffix)
         item: ImageStrWithPageRange = (
@@ -132,6 +138,7 @@ async def fetch_pdf_and_split_into_image_strs(job_record: JobRequestsRecord) -> 
         await asyncio.to_thread(save_json, tmp_file_path, item)
         image_str_paths.append(tmp_file_path)
 
+    document.close()
     return image_str_paths
 
 

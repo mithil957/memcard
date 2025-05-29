@@ -131,7 +131,7 @@ class GenerateFlashcardsWorkflow:
             for highlight in highlights:
                 handle = workflow.start_activity(
                     get_matches_for_highlight, 
-                    highlight,
+                    (highlight, processed_pdf_id),
                     schedule_to_close_timeout=short_timeout,
                     retry_policy=few_shot
                 )
@@ -416,7 +416,7 @@ class GenerateFlashcardsWorkflow:
         for highlight in highlights:
             handle = workflow.start_activity(
                 get_matches_for_highlight, 
-                highlight,
+                (highlight, job_record['source_pdf']),
                 schedule_to_close_timeout=short_timeout,
                 retry_policy=few_shot
             )

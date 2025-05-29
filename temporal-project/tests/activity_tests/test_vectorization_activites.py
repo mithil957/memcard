@@ -4,7 +4,7 @@ from activity.data_vectorization_activites import (
     get_chunk_id_batches,
     construct_context_vector_and_save
 )
-from database.vector_database_utils import perform_vector_search
+from database.vector_database_utils import perform_vector_search_within_document
 from asyncio.tasks import gather
 from tests.test_setup_cleanup_fixture import (
     run_around_tests
@@ -24,7 +24,7 @@ async def test_data_vectorization_activites(run_around_tests):
     
     await gather(*context_vector_insert_handles)
 
-    matches = await perform_vector_search(VECTORS_FOR_PB_DATA, "optimization")
+    matches = await perform_vector_search_within_document(VECTORS_FOR_PB_DATA, "optimization", source_pdf_id)
     assert len(matches) != 0
     
     

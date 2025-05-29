@@ -12,7 +12,7 @@ from database.database_utils import (
 
 from database.vector_database_utils import (
     DocumentCoordinate,
-    perform_vector_search,
+    perform_vector_search_within_document,
     traverse_document_to_coordinate
 )
 
@@ -42,6 +42,7 @@ class MetadataWithHighlight(VectorMetadata):
 SourceJobId = str
 SourcePdfId = str
 UserId = str
+HighlightWithSourcePdfId = tuple[Highlight, SourcePdfId]
 RelatedIdsWithGroup = tuple[tuple[SourceJobId,
                                   SourcePdfId, UserId], list[MetadataWithHighlight]]
 
@@ -123,8 +124,9 @@ async def get_all_highlights(source_pdf_id: str) -> list[Highlight]:
 
 
 @activity.defn
-async def get_matches_for_highlight(highlight: Highlight) -> list[MetadataWithHighlight]:
-    points = await perform_vector_search(VECTORS_FOR_PB_DATA, highlight, limit=4)
+async def get_matches_for_highlight(highlightWithSourcePdfId: HighlightWithSourcePdfId) -> list[MetadataWithHighlight]:
+    highlight, source_pdf_id = highlightWithSourcePdfId
+    points = await perform_vector_search_within_document(VECTORS_FOR_PB_DATA, highlight, source_pdf_id, limit=4)
     return list(map(
         lambda p: {**p.payload, **{"highlight_text": highlight}}, # type: ignore
         points

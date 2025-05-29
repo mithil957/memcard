@@ -119,7 +119,7 @@ async def text_to_vec(text_lst: list[str], embed_type: EmbedType, max_retries: i
     raise Exception("Unable to generate embeddings")
 
 
-async def perform_vector_search(collection_name: str, query_text: str, limit=50) -> list[models.ScoredPoint]:
+async def perform_vector_search_within_document(collection_name: str, query_text: str, source_pdf_id: str, limit=7) -> list[models.ScoredPoint]:
     embeddings = await text_to_vec([query_text], "RETRIEVAL_QUERY")
     vec_of_text = embeddings[0].values
 
@@ -131,6 +131,14 @@ async def perform_vector_search(collection_name: str, query_text: str, limit=50)
         collection_name=collection_name,
         query_vector=vec_of_text,
         limit=limit,
+        query_filter=models.Filter(
+            must=[
+                models.FieldCondition(
+                    key='source_pdf',
+                    match=models.MatchValue(value=source_pdf_id)
+                )
+            ]
+        ),
         search_params=models.SearchParams(
             quantization=models.QuantizationSearchParams(
                 ignore=False,
