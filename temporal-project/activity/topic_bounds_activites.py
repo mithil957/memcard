@@ -71,11 +71,15 @@ async def get_topic_bounds_for_batch(segment_batch: SegmentBatch) -> list[TopicB
             )
         )
 
-    topic_bounds = await b.IdentifyMultipleTopicBoundaries(segments_baml)
-
-    # Calculate topic bounds with offset using the index of the first segment
-    segment_index = pdf_segment_records[0]["segment_index_in_document"]
-    return list(map(lambda bound: bound + segment_index, topic_bounds))
+    try:
+        topic_bounds = await b.IdentifyMultipleTopicBoundaries(segments_baml)
+        # Calculate topic bounds with offset using the index of the first segment
+        segment_index = pdf_segment_records[0]["segment_index_in_document"]
+        return list(map(lambda bound: bound + segment_index, topic_bounds))
+    except Exception as e:
+        # TODO add more robust default option
+        # when API call fails
+        return list(map(lambda bound: bound + segment_index, [0, len(segments_baml)]))
 
 
 @activity.defn

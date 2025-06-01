@@ -52,6 +52,10 @@ from activity.generate_cards_activities import (
     generate_and_save_flashcards_from_group
 )
 
+from activity.cluster_cards_activites import (
+    cluster_generated_cards
+)
+
 from workflows.generate_flashcards import GenerateFlashcardsWorkflow
 from workflows.generate_flashcards import GenerateFlashcardsParameters
 
@@ -97,7 +101,9 @@ async def test_generate_flashcards_workflow():
                 # Flashcard generation
                 get_all_highlights,
                 get_matches_for_highlight,
-                generate_and_save_flashcards_from_group
+                generate_and_save_flashcards_from_group,
+                # Flashcard clustering
+                cluster_generated_cards
             ],
         ):
             job_record_id = "6q744g5gnpji19l"

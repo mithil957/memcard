@@ -19,7 +19,8 @@ _REQUEST_INTERVAL_SECONDS = 0.1
 
 # --- Helpful Types ---
 EmbedType = Literal["RETRIEVAL_QUERY",
-                    "RETRIEVAL_DOCUMENT", "CODE_RETRIEVAL_QUERY"]
+                    "RETRIEVAL_DOCUMENT", "CODE_RETRIEVAL_QUERY",
+                    "CLUSTERING"]
 
 
 @dataclass(order=True)

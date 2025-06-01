@@ -1,15 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import StepperUI from "@/components/stepper-ui";
-import RateCardsStep from "@/components/wizard-steps/rate-cards-step";
-import ExportStep from "@/components/wizard-steps/export-step";
-import { pb } from "@/lib/pocketbase"; // Import Pocketbase
-import { useToast } from "@/hooks/use-toast"; // For potential error toasts
-import { Loader2 } from "lucide-react"; // For loading indicator
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import FlashcardRating from "@/components/flashcard-rating";
+import { pb } from "@/lib/pocketbase";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Download } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +31,7 @@ import {
 
 interface RateCardsPageProps {
   params: {
-    id: string;
+    id: string; // This is the sourceJobId
   };
 }
 
@@ -32,135 +39,215 @@ interface FlashcardRecord {
   id: string;
   front: string;
   back: string;
+  rating: string | null;
+  cluster_label: number | null;
 }
+
+interface FlashcardRow {
+  id: string;
+  question: string;
+  answer: string;
+  clusterLabel: number | null;
+  color: string;
+  rating: number | null;
+  selectedForExport: boolean;
+}
+
+const generateColorForCluster = (
+  label: number | null,
+  uniqueLabels: (number | null)[],
+): string => {
+  const index = uniqueLabels.indexOf(label);
+
+  const medianPointUpper = Math.ceil(uniqueLabels.length / 2);
+  const steps = Math.floor(index / 2);
+  const mappedIndex = index % 2 === 0 ? steps : medianPointUpper + steps;
+
+  const baseHue =
+    (mappedIndex * (360.0 / Math.max(1, uniqueLabels.length))) % 360;
+
+  return `hsl(${baseHue.toFixed(0)}, 70%, 80%)`;
+};
+
+const escapeCsvField = (field: string): string => {
+  if (field === null || field === undefined) {
+    return "";
+  }
+  const stringField = String(field);
+  if (
+    stringField.includes(",") ||
+    stringField.includes("\n") ||
+    stringField.includes('"')
+  ) {
+    return `"${stringField.replace(/"/g, '""')}"`;
+  }
+  return stringField;
+};
 
 export default function RateCardsPage({ params }: RateCardsPageProps) {
   const router = useRouter();
   const { toast } = useToast();
   const { id: sourceJobId } = params;
-  const [currentStep, setCurrentStep] = useState(1);
-  const [flashcards, setFlashcards] = useState<
-    Array<{ question: string; answer: string; id: string }>
-  >([]);
+
+  const [flashcards, setFlashcards] = useState<FlashcardRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [ratings, setRatings] = useState<Record<string, number | null>>({});
   const [isConfirmingHome, setIsConfirmingHome] = useState(false);
 
-  // Updated steps for the two-step wizard
-  const steps = [
-    { number: 1, label: "Rate cards" },
-    { number: 2, label: "Export" },
-  ];
+  const fetchCards = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
 
-  const handleNext = () => {
-    if (currentStep < steps.length) {
-      setCurrentStep(currentStep + 1);
+    if (!pb.authStore.isValid || !pb.authStore.record?.id) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be logged in to view flashcards.",
+        variant: "destructive",
+      });
+      router.push("/auth");
+      setIsLoading(false);
+      return;
     }
-  };
 
-  const handleBack = () => {
-    if (currentStep == 1) {
-      router.push("/jobstat");
-    } else {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const handleGoHomeConfirmed = () => {
-    setIsConfirmingHome(false);
-    router.push("/actions");
-  };
-
-  const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <RateCardsStep
-            flashcards={flashcards}
-            ratings={ratings}
-            setRatings={setRatings}
-          />
-        );
-      case 2:
-        return <ExportStep flashcards={flashcards} />;
-      default:
-        return (
-          <RateCardsStep
-            flashcards={flashcards}
-            ratings={ratings}
-            setRatings={setRatings}
-          />
-        );
-    }
-  };
-
-  useEffect(() => {
-    const fetchCards = async () => {
-      setIsLoading(true);
-      setError(null);
-
-      if (!pb.authStore.isValid || !pb.authStore.model?.id) {
-        toast({
-          title: "Authentication Error",
-          description: "You must be logged in to view flashcards.",
-          variant: "destructive",
+    try {
+      const records = await pb
+        .collection("flashcards_store")
+        .getFullList<FlashcardRecord>({
+          filter: `source_job = "${sourceJobId}" && user_id = "${pb.authStore.record?.id}"`,
+          sort: "+cluster_label",
         });
-        router.push("/auth");
-        setIsLoading(false);
-        return;
-      }
 
-      try {
-        const records = await pb
-          .collection("flashcards_store")
-          .getFullList<FlashcardRecord>({
-            filter: `source_job = "${sourceJobId}" && user_id = "${pb.authStore.model.id}"`,
-          });
+      const uniqueClusterLabels = Array.from(
+        new Set(records.map((r) => r.cluster_label)),
+      );
 
-        const formattedCards = records.map((record) => ({
+      const formattedCards: FlashcardRow[] = records.map((record) => {
+        const ratingValue = record.rating ? parseInt(record.rating, 10) : null;
+        return {
           id: record.id,
           question: record.front,
           answer: record.back,
-        }));
+          clusterLabel: record.cluster_label,
+          color: generateColorForCluster(
+            record.cluster_label,
+            uniqueClusterLabels,
+          ),
+          rating: isNaN(ratingValue as number) ? null : ratingValue,
+          selectedForExport: true,
+        };
+      });
 
-        setFlashcards(formattedCards);
+      setFlashcards(formattedCards);
+    } catch (err: any) {
+      console.error("Failed to load flashcards:", err);
+      setError(
+        "Failed to load flashcards. The job ID may be invalid, or no cards were generated/found for this job for your user.",
+      );
+      toast({
+        title: "Error Loading Flashcards",
+        description:
+          err.message || "Could not retrieve flashcards for this job.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sourceJobId, router, toast]);
 
-        const initialRatings: Record<string, number | null> = {};
-        formattedCards.forEach((card) => {
-          initialRatings[card.id] = null;
-        });
-        setRatings(initialRatings);
-      } catch (err: any) {
-        console.error("Failed to load flashcards:", err);
-        setError(
-          "Failed to load flashcards. The job ID may be invalid, or no cards were generated for this job.",
-        );
-        toast({
-          title: "Error Loading Flashcards",
-          description:
-            err.message || "Could not retrieve flashcards for this job.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
+  useEffect(() => {
     if (sourceJobId) {
       fetchCards();
     } else {
       setError("Job ID is missing.");
       setIsLoading(false);
     }
-  }, [sourceJobId, router, toast]);
+  }, [sourceJobId, fetchCards]);
 
-  // const handleFinishRating = () => {
-  //   // This function's purpose might change.
-  //   // If ratings are saved to backend, this would be the place.
-  //   console.log("Submitting ratings:", ratings);
-  //   // For now, it's just a placeholder.
-  // };
+  const handleRateCard = async (cardId: string, rating: number | null) => {
+    const originalFlashcards = [...flashcards];
+    setFlashcards((prev) =>
+      prev.map((card) =>
+        card.id === cardId ? { ...card, rating: rating } : card,
+      ),
+    );
+
+    try {
+      await pb.collection("flashcards_store").update(cardId, {
+        rating: rating === null ? null : String(rating),
+      });
+      toast({
+        title: "Rating Saved",
+        description: `Card rating has been updated.`,
+        duration: 2000,
+      });
+    } catch (error: any) {
+      console.error("Failed to save rating:", error);
+      setFlashcards(originalFlashcards); // Revert on error
+      toast({
+        title: "Error Saving Rating",
+        description:
+          error.message ||
+          "Could not update the card rating. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleToggleExport = (cardId: string) => {
+    setFlashcards((prev) =>
+      prev.map((card) =>
+        card.id === cardId
+          ? { ...card, selectedForExport: !card.selectedForExport }
+          : card,
+      ),
+    );
+  };
+
+  const handleExport = () => {
+    const cardsToExport = flashcards.filter((card) => card.selectedForExport);
+    if (cardsToExport.length === 0) {
+      toast({
+        title: "No Cards Selected",
+        description: "Please select at least one card to export.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const csvHeader = "Front,Back\n";
+    const csvRows = cardsToExport
+      .map(
+        (card) =>
+          `${escapeCsvField(card.question)},${escapeCsvField(card.answer)}`,
+      )
+      .join("\n");
+    const csvContent = csvHeader + csvRows;
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `flashcards_job_${sourceJobId}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Export Successful",
+      description: "Selected flashcards have been exported as CSV.",
+    });
+  };
+
+  const handleGoHomeConfirmed = () => {
+    setIsConfirmingHome(false);
+    router.push("/actions"); // Navigate to main actions page
+  };
+
+  const handleBackToJobs = () => {
+    router.push("/jobstat");
+  };
 
   if (isLoading) {
     return (
@@ -182,7 +269,7 @@ export default function RateCardsPage({ params }: RateCardsPageProps) {
         <Card className="w-full max-w-4xl bg-white rounded-3xl shadow-lg p-6 text-center">
           <h2 className="text-3xl font-bold mb-6 text-red-600">Error</h2>
           <p className="text-red-500 mb-6">{error}</p>
-          <Button onClick={() => router.push("/jobstat")} className="">
+          <Button onClick={handleBackToJobs} className="">
             Back to Jobs List
           </Button>
         </Card>
@@ -194,12 +281,12 @@ export default function RateCardsPage({ params }: RateCardsPageProps) {
     return (
       <div className="min-h-screen w-full bg-gradient-to-tr from-[#51A4EE] to-[#214DCE] flex items-center justify-center p-4">
         <Card className="w-full max-w-4xl bg-white rounded-3xl shadow-lg p-6 text-center">
-          <h2 className="text-3xl font-bold mb-6">No flashcards found</h2>
+          <h2 className="text-3xl font-bold mb-6">No Flashcards Found</h2>
           <p className="text-gray-600 mb-6">
             No flashcards were found for this job, or they might still be
             processing.
           </p>
-          <Button onClick={() => router.push("/jobstat")} className="">
+          <Button onClick={handleBackToJobs} className="">
             Back to Jobs List
           </Button>
         </Card>
@@ -209,63 +296,119 @@ export default function RateCardsPage({ params }: RateCardsPageProps) {
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-tr from-[#51A4EE] to-[#214DCE] flex items-center justify-center p-4">
-      <Card className="w-full max-w-4xl bg-[#FAF9F7] rounded-3xl shadow-lg overflow-hidden relative">
-        <div className="pr-6 pl-6">
-          <div className="flex flex-col md:flex-row gap-6">
-            <div className="md:w-1/3 relative pb-6 min-h-[600px]">
-              <StepperUI steps={steps} currentStep={currentStep} />
-              <div className="hidden md:block absolute top-0 right-0 bottom-0 w-px bg-[#C6D5EB]"></div>
-            </div>
-
-            <div className="md:w-2/3 flex flex-col">
-              <div className="p-4 pb-16 flex-grow">{renderStep()}</div>
-
-              <div className="absolute bottom-6 right-10 flex justify-end mt-6 space-x-2">
-                <Button
-                  variant="outline"
-                  onClick={handleBack}
-                  className="font-semibold text-base"
-                >
-                  Back
+      <Card className="w-full max-w-5xl bg-[#FAF9F7] rounded-3xl shadow-lg overflow-hidden">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-semibold">
+              Rate and Export Flashcards
+              <p className="text-base font-light text-gray-600 mb-0">
+                This is to rate the quality of the cards generated
+              </p>
+              <p className="text-base font-light text-gray-600 mb-0">
+                {flashcards.length} {flashcards.length == 1 ? "card" : "cards"}
+              </p>
+            </h1>
+            <AlertDialog
+              open={isConfirmingHome}
+              onOpenChange={setIsConfirmingHome}
+            >
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="font-semibold text-base">
+                  Home
                 </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirm Navigation</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to return to the home page? Your
+                    ratings are saved as you make them, but ensure all desired
+                    actions are complete.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleGoHomeConfirmed}>
+                    Confirm
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
 
-                {currentStep === 1 && (
-                  <Button
-                    onClick={handleNext}
-                    className="font-semibold text-base"
-                  >
-                    Next
-                  </Button>
-                )}
+          <div className="border rounded-lg overflow-x-auto mb-6">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-100">
+                  <TableHead className="font-bold w-16 text-center">
+                    Group
+                  </TableHead>
+                  <TableHead className="font-bold min-w-[200px]">
+                    Front
+                  </TableHead>
+                  <TableHead className="font-bold min-w-[200px]">
+                    Back
+                  </TableHead>
+                  <TableHead className="font-bold w-[200px] text-center">
+                    Rating
+                  </TableHead>
+                  <TableHead className="font-bold w-20 text-center">
+                    Export
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {flashcards.map((card) => (
+                  <TableRow key={card.id} className="border-t hover:bg-gray-50">
+                    <TableCell className="align-middle text-center">
+                      <div
+                        className="w-6 h-6 rounded-sm mx-auto"
+                        style={{ backgroundColor: card.color }}
+                        title={card.clusterLabel?.toString() || "No Cluster"}
+                      ></div>
+                    </TableCell>
+                    <TableCell className="align-middle py-3 px-4 text-base">
+                      {card.question}
+                    </TableCell>
+                    <TableCell className="align-middle py-3 px-4 text-base">
+                      {card.answer}
+                    </TableCell>
+                    <TableCell className="align-middle text-center py-3">
+                      <FlashcardRating
+                        cardId={card.id}
+                        currentRating={card.rating}
+                        onRate={handleRateCard}
+                      />
+                    </TableCell>
+                    <TableCell className="align-middle text-center py-3">
+                      <Checkbox
+                        checked={card.selectedForExport}
+                        onCheckedChange={() => handleToggleExport(card.id)}
+                        aria-label={`Select card ${card.id} for export`}
+                        className="mx-auto"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
 
-                {currentStep === 2 && ( // Show Home button on Export step
-                  <AlertDialog
-                    open={isConfirmingHome}
-                    onOpenChange={setIsConfirmingHome}
-                  >
-                    <AlertDialogTrigger asChild>
-                      <Button className="font-semibold text-base">Home</Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Confirm Navigation</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to return to the wizard home
-                          page? Your ratings might not be saved if you haven't
-                          submitted them.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleGoHomeConfirmed}>
-                          Confirm
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-              </div>
-            </div>
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <Button
+              variant="outline"
+              onClick={handleBackToJobs}
+              className="font-semibold text-base w-full sm:w-auto"
+            >
+              Back to Jobs
+            </Button>
+            <Button
+              onClick={handleExport}
+              className="font-semibold text-base bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export Selected to CSV
+            </Button>
           </div>
         </div>
       </Card>

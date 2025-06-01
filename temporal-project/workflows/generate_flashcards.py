@@ -56,6 +56,10 @@ with workflow.unsafe.imports_passed_through():
         generate_and_save_flashcards_from_group
     )
 
+    from activity.cluster_cards_activites import (
+        cluster_generated_cards
+    )
+
     from activity.util_activites import (
         set_job_request_status
     )
@@ -95,9 +99,12 @@ class GenerateFlashcardsWorkflow:
             retry_policy=one_shot
         )
 
+        # We found an already processed PDF for we can use all previously constructed segments, chunks, topics, vectors
         if processed_pdf_id is not None:
-            workflow.logger.info(f"Duplicate PDF found - {job_parameters.job_record_id} - {processed_pdf_id}")
-            workflow.logger.info(f"Flashcard generation starts - {job_parameters.job_record_id}")
+            workflow.logger.info(
+                f"Duplicate PDF found - {job_parameters.job_record_id} - {processed_pdf_id}")
+            workflow.logger.info(
+                f"Flashcard generation starts - {job_parameters.job_record_id}")
             await workflow.start_activity(
                 delete_all_old_highlights,
                 processed_pdf_id,
@@ -127,16 +134,16 @@ class GenerateFlashcardsWorkflow:
             )
 
             highlight_vector_fetch_handles = []
-            
+
             for highlight in highlights:
                 handle = workflow.start_activity(
-                    get_matches_for_highlight, 
+                    get_matches_for_highlight,
                     (highlight, processed_pdf_id),
                     schedule_to_close_timeout=short_timeout,
                     retry_policy=few_shot
                 )
                 highlight_vector_fetch_handles.append(handle)
-            
+
             all_matches = await gather(*highlight_vector_fetch_handles)
 
             groups = transform_matches_into_groups(all_matches)
@@ -146,15 +153,38 @@ class GenerateFlashcardsWorkflow:
                 handle = workflow.start_activity(
                     generate_and_save_flashcards_from_group,
                     (
-                        (job_record['id'], job_record['source_pdf'], job_record['user']), # Here we can save the flashcards with the new PDF id
+                        # Here we can save the flashcards with the new PDF id
+                        (job_record['id'], job_record['source_pdf'], job_record['user']),
                         selected_group
                     ),
                     start_to_close_timeout=medium_timeout,
                     retry_policy=few_shot
                 )
                 flashcard_generate_handles.append(handle)
-            
-            await gather(*flashcard_generate_handles) 
+
+            await gather(*flashcard_generate_handles)
+
+            await workflow.start_activity(
+                set_job_request_status,
+                (job_record['id'], "Flashcards Generated"),
+                start_to_close_timeout=short_timeout,
+                retry_policy=one_shot
+            )
+
+            await workflow.start_activity(
+                cluster_generated_cards,
+                (job_record['id'], job_record['source_pdf'],
+                 job_record['user']),
+                start_to_close_timeout=medium_timeout,
+                retry_policy=few_shot
+            )
+
+            await workflow.start_activity(
+                set_job_request_status,
+                (job_record['id'], "Flashcards Clustered"),
+                start_to_close_timeout=short_timeout,
+                retry_policy=one_shot
+            )
 
             await workflow.start_activity(
                 set_job_request_status,
@@ -165,10 +195,9 @@ class GenerateFlashcardsWorkflow:
 
             return "Workflow done - Skipped steps because duplicate found"
 
-
         # Extract and save highlights of the PDF
         await workflow.start_activity(
-            extract_and_save_highlights, 
+            extract_and_save_highlights,
             (job_record['source_pdf'], job_record['source_pdf']),
             start_to_close_timeout=short_timeout,
             retry_policy=one_shot
@@ -269,9 +298,9 @@ class GenerateFlashcardsWorkflow:
             topic_bounds_fetch_handles.append(handle)
 
         topic_boundaries_found: list[list[TopicBoundary]] = await gather(*topic_bounds_fetch_handles)
-        
+
         last_segment_index = await workflow.start_activity(
-            get_last_segment_index_of_document, 
+            get_last_segment_index_of_document,
             job_record['source_pdf'],
             schedule_to_close_timeout=short_timeout,
             retry_policy=few_shot
@@ -374,7 +403,8 @@ class GenerateFlashcardsWorkflow:
         workflow.logger.info(
             f"Document summary finished - {document_summary_record} - {job_parameters.job_record_id}"
         )
-        workflow.logger.info(f"Vectorization starts - {job_parameters.job_record_id}")
+        workflow.logger.info(
+            f"Vectorization starts - {job_parameters.job_record_id}")
 
         chunk_batches = await workflow.start_activity(
             get_chunk_id_batches,
@@ -386,13 +416,13 @@ class GenerateFlashcardsWorkflow:
         context_vector_insert_handles = []
         for chunk_batch in chunk_batches:
             handle = workflow.start_activity(
-                construct_context_vector_and_save, 
+                construct_context_vector_and_save,
                 chunk_batch,
-                schedule_to_close_timeout=short_timeout,
+                schedule_to_close_timeout=medium_timeout,
                 retry_policy=few_shot
             )
             context_vector_insert_handles.append(handle)
-        
+
         await gather(*context_vector_insert_handles)
 
         await workflow.start_activity(
@@ -402,8 +432,10 @@ class GenerateFlashcardsWorkflow:
             retry_policy=one_shot
         )
 
-        workflow.logger.info(f"Vectorization ends - {job_parameters.job_record_id}")
-        workflow.logger.info(f"Flashcard generation starts - {job_parameters.job_record_id}")
+        workflow.logger.info(
+            f"Vectorization ends - {job_parameters.job_record_id}")
+        workflow.logger.info(
+            f"Flashcard generation starts - {job_parameters.job_record_id}")
 
         highlights = await workflow.start_activity(
             get_all_highlights,
@@ -415,13 +447,13 @@ class GenerateFlashcardsWorkflow:
         highlight_vector_fetch_handles = []
         for highlight in highlights:
             handle = workflow.start_activity(
-                get_matches_for_highlight, 
+                get_matches_for_highlight,
                 (highlight, job_record['source_pdf']),
                 schedule_to_close_timeout=short_timeout,
                 retry_policy=few_shot
             )
             highlight_vector_fetch_handles.append(handle)
-        
+
         all_matches = await gather(*highlight_vector_fetch_handles)
 
         groups = transform_matches_into_groups(all_matches)
@@ -438,8 +470,32 @@ class GenerateFlashcardsWorkflow:
                 retry_policy=few_shot
             )
             flashcard_generate_handles.append(handle)
-        
-        await gather(*flashcard_generate_handles) 
+
+        await gather(*flashcard_generate_handles)
+
+        await workflow.start_activity(
+            set_job_request_status,
+            (job_record['id'], "Flashcards Generated"),
+            start_to_close_timeout=short_timeout,
+            retry_policy=one_shot
+        )
+
+        workflow.logger.info(
+            f"Flashcard generation finished - {job_parameters.job_record_id}")
+
+        await workflow.start_activity(
+            cluster_generated_cards,
+            (job_record['id'], job_record['source_pdf'], job_record['user']),
+            start_to_close_timeout=medium_timeout,
+            retry_policy=few_shot
+        )
+
+        await workflow.start_activity(
+            set_job_request_status,
+            (job_record['id'], "Flashcards Clustered"),
+            start_to_close_timeout=short_timeout,
+            retry_policy=one_shot
+        )
 
         await workflow.start_activity(
             set_job_request_status,
@@ -448,7 +504,4 @@ class GenerateFlashcardsWorkflow:
             retry_policy=one_shot
         )
 
-        workflow.logger.info(f"Flashcard generation finished - {job_parameters.job_record_id}")
         return "Workflow done"
-
-

@@ -17,8 +17,9 @@ JobRequestStates = Literal["Queued",
                            "Segmentation", 
                            "Chunking", "Topic Bounds",
                            "Topic Summaries", "Document Summary",
-                           "Vectors", "Finished",
-                           "Done", "Error",
+                           "Vectors", 
+                           "Flashcards Generated", "Flashcards Clustered",
+                           "Finished", "Error",
                            ]
 
 JobRecordWithStatus = tuple[str, JobRequestStates]

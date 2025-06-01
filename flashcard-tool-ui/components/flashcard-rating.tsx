@@ -1,5 +1,4 @@
 "use client";
-import { X } from "lucide-react";
 
 interface FlashcardRatingProps {
   cardId: string;
@@ -13,27 +12,26 @@ export default function FlashcardRating({
   onRate,
 }: FlashcardRatingProps) {
   const emojis = [
-    { rating: 1, emoji: "😩", label: "Terrible" },
-    { rating: 2, emoji: "😔", label: "Poor" },
-    { rating: 3, emoji: "😐", label: "Okay" },
-    { rating: 4, emoji: "🙂", label: "Good" },
-    { rating: 5, emoji: "💯", label: "Great" },
-    { rating: 6, emoji: "😵‍💫", label: "Confusing" },
-    { rating: 7, emoji: "🤬", label: "Inaccurate" },
+    { rating: 5, emoji: "💯", label: "Perfect" }, // Perfect
+    { rating: 4, emoji: "🙂", label: "Okay" }, // Okay
+    { rating: 1, emoji: "😩", label: "Terrible" }, // Terrible
+    { rating: 6, emoji: "😵‍💫", label: "Confusing" }, // Confusing
+    { rating: 7, emoji: "🤬", label: "Inaccurate" }, // Inaccurate
   ];
 
   return (
-    <div className="flex items-center justify-center space-x-4">
+    <div className="flex items-center justify-center space-x-2 sm:space-x-3">
       {emojis.map((emoji) => (
         <button
           key={emoji.rating}
           onClick={() => onRate(cardId, emoji.rating)}
-          className={`text-2xl transition-transform ${
+          className={`text-xl sm:text-2xl transition-transform ${
             currentRating === emoji.rating
-              ? "scale-150"
-              : "scale-100 hover:scale-150"
+              ? "scale-125 sm:scale-150"
+              : "scale-100 hover:scale-150 sm:hover:scale-150"
           }`}
           aria-label={`Rate as ${emoji.label}`}
+          title={emoji.label}
         >
           {emoji.emoji}
         </button>

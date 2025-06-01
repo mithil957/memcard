@@ -47,8 +47,6 @@ RelatedIdsWithGroup = tuple[tuple[SourceJobId,
                                   SourcePdfId, UserId], list[MetadataWithHighlight]]
 
 # --- Helpful Functions ---
-
-
 def flatten_match_results_for_all_highlights(l: list[MetadataWithHighlight],
                                              r: list[MetadataWithHighlight]) -> list[MetadataWithHighlight]:
     l.extend(r)

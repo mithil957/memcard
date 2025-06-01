@@ -33,7 +33,7 @@ async def test_generate_flashcards_activites(run_around_tests):
 
     highlight_vector_fetch_handles = []
     for highlight in highlights:
-        handle = env.run(get_matches_for_highlight, highlight)
+        handle = env.run(get_matches_for_highlight, (highlight, source_pdf_id))
         highlight_vector_fetch_handles.append(handle)
     
     all_matches: list[list[MetadataWithHighlight]] = await gather(*highlight_vector_fetch_handles)

@@ -108,5 +108,6 @@ class FlashcardsStoreRecord(TypedDict):
     rating: str
     comments_by_user: str
     context_generated_from: dict[str, Any]
+    cluster_label: int
     created: str
     updated: str
