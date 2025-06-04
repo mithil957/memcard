@@ -7,14 +7,9 @@ from qdrant_client import models, AsyncQdrantClient
 import google.genai as genai
 from google.genai import types as genai_types
 from dataclasses import dataclass
+from database.tps_utils import rate_limit
 
-import time
 import asyncio
-
-# --- Config ---
-_RATE_LIMIT_LOCK = asyncio.Lock()
-_LAST_API_CALL_TIMESTAMP = 0.0
-_REQUEST_INTERVAL_SECONDS = 0.1
 
 
 # --- Helpful Types ---
@@ -41,46 +36,6 @@ async def get_qdrant_client() -> AsyncQdrantClient:
     return AsyncQdrantClient(QDRANT_URL)
 
 
-async def setup_vector_collection():
-    client = await get_qdrant_client()
-
-    await client.recreate_collection(
-        collection_name=VECTORS_FOR_PB_DATA, 
-        vectors_config=models.VectorParams(size=768, distance=models.Distance.DOT),
-        quantization_config=models.BinaryQuantization(
-            binary=models.BinaryQuantizationConfig(
-                always_ram=False,
-            ),
-        ),
-        on_disk_payload=True
-    )
-
-    await client.create_payload_index(
-        collection_name=VECTORS_FOR_PB_DATA,
-        field_name="source_pdf",
-        field_schema=models.PayloadSchemaType.KEYWORD,
-    )
-
-    await client.create_payload_index(
-        collection_name=VECTORS_FOR_PB_DATA,
-        field_name="topic_number",
-        field_schema=models.PayloadSchemaType.INTEGER,
-    )
-
-    
-    await client.create_payload_index(
-        collection_name=VECTORS_FOR_PB_DATA,
-        field_name="segment_index_in_document",
-        field_schema=models.PayloadSchemaType.INTEGER,
-    )
-
-    await client.create_payload_index(
-        collection_name=VECTORS_FOR_PB_DATA,
-        field_name="chunk_index_in_segment",
-        field_schema=models.PayloadSchemaType.INTEGER,
-    )
-
-
 def _sync_embed_batch(text_lst: list[str], embed_type: EmbedType) -> list[genai_types.ContentEmbedding]:
     client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -93,31 +48,10 @@ def _sync_embed_batch(text_lst: list[str], embed_type: EmbedType) -> list[genai_
         raise Exception("Embedding API returned no embeddings")
     return result.embeddings
 
-
-async def text_to_vec(text_lst: list[str], embed_type: EmbedType, max_retries: int = 5) -> list[genai_types.ContentEmbedding]:
-    global _LAST_API_CALL_TIMESTAMP
-
-    current_retry = 0
-    while current_retry <= max_retries:
-        async with _RATE_LIMIT_LOCK:
-            current_time = time.monotonic()
-            time_since_last_call = current_time - _LAST_API_CALL_TIMESTAMP
-            if time_since_last_call < _REQUEST_INTERVAL_SECONDS:
-                await asyncio.sleep(_REQUEST_INTERVAL_SECONDS - time_since_last_call)
-            _LAST_API_CALL_TIMESTAMP = time.monotonic()
-
-            try:
-                embeddings = await asyncio.to_thread(_sync_embed_batch, text_lst, embed_type)
-                return embeddings
-            except genai.errors.ClientError as e:  # type: ignore
-                if e.code == 429:
-                    print("retrying again")
-                    current_retry += 1
-                    await asyncio.sleep(2)
-            except Exception as e:
-                raise e
-
-    raise Exception("Unable to generate embeddings")
+@rate_limit("embedding", tps=50)
+async def text_to_vec(text_lst: list[str], embed_type: EmbedType) -> list[genai_types.ContentEmbedding]:
+    embeddings = await asyncio.to_thread(_sync_embed_batch, text_lst, embed_type)
+    return embeddings
 
 
 async def perform_vector_search_within_document(collection_name: str, query_text: str, source_pdf_id: str, limit=7) -> list[models.ScoredPoint]:
@@ -140,6 +74,30 @@ async def perform_vector_search_within_document(collection_name: str, query_text
                 )
             ]
         ),
+        search_params=models.SearchParams(
+            quantization=models.QuantizationSearchParams(
+                ignore=False,
+                rescore=True,
+                oversampling=2.0
+            )
+        )
+    )
+
+    return matches
+
+
+async def perform_vector_search(collection_name: str, query_text: str, limit=20) -> list[models.ScoredPoint]:
+    embeddings = await text_to_vec([query_text], "RETRIEVAL_QUERY")
+    vec_of_text = embeddings[0].values
+
+    if vec_of_text is None:
+        raise Exception(f"Failed to generate vector - {query_text}")
+
+    client = await get_qdrant_client()
+    matches = await client.search(
+        collection_name=collection_name,
+        query_vector=vec_of_text,
+        limit=limit,
         search_params=models.SearchParams(
             quantization=models.QuantizationSearchParams(
                 ignore=False,

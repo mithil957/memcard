@@ -1,19 +1,31 @@
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from temporalio.client import Client
 from pydantic import BaseModel
 import os
 import asyncio
 
-
+from actions.generate_meta_document import get_metadocument_for_query
 from workflows.generate_flashcards import GenerateFlashcardsWorkflow, GenerateFlashcardsParameters
-
-class PdfWorkflowRequest(BaseModel):
-    pdf_record_id: str
 
 class GenerateFlashcardsRequest(BaseModel):
     generate_flashcards_job_id: str
 
+class GenerateMetadocumentRequest(BaseModel):
+    query: str
+
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        os.getenv("FRONTEND_URL", "localhost:3000")
+    ],  
+    allow_credentials=True, 
+    allow_methods=["*"],    
+    allow_headers=["*"],   
+)
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -65,4 +77,15 @@ async def trigger_generate_flashcards_endpoint(payload: GenerateFlashcardsReques
     return {
         "message": "Generate flashcards workflow triggered successfully.",
         "workflow_id": workflow_id
+    }
+
+
+@app.post("/generate-metadocument")
+async def trigger_generate_metadocument_endpoint(payload: GenerateMetadocumentRequest, request: Request):
+    print(f"Metadocument generation for query - {payload.query}")
+    metadocument = await get_metadocument_for_query(payload.query)
+    
+    return {
+        "message": "Generate a metadocument succesfully",
+        "metadocument": metadocument
     }

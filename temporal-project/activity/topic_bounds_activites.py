@@ -17,6 +17,8 @@ from database.database_utils import (
     get_first_matching_record
 )
 
+from database.baml_funcs import identify_topic_bounds
+
 # --- CONFIG ---
 set_log_level("OFF")
 
@@ -72,7 +74,7 @@ async def get_topic_bounds_for_batch(segment_batch: SegmentBatch) -> list[TopicB
         )
 
     try:
-        topic_bounds = await b.IdentifyMultipleTopicBoundaries(segments_baml)
+        topic_bounds = await identify_topic_bounds(segments_baml)
         # Calculate topic bounds with offset using the index of the first segment
         segment_index = pdf_segment_records[0]["segment_index_in_document"]
         return list(map(lambda bound: bound + segment_index, topic_bounds))

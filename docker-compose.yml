@@ -12,6 +12,7 @@ services:
     environment:
       - WATCHPACK_POLLING=true
       - NEXT_PUBLIC_POCKETBASE_URL=http://localhost:8090
+      - NEXT_PUBLIC_FASTAPI_URL=http://localhost:5001
 
   pocketbase:
     build:
@@ -116,6 +117,7 @@ services:
       - PB_APP_USER_PASSWORD=${TEMPORAL_BOT_PASSWORD:-password2}
       - QDRANT_URL=http://qdrant:6333
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - FRONTEND_URL=http://localhost:3000
     depends_on:
       - temporal_server
       - pocketbase

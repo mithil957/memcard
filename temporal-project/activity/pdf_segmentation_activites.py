@@ -18,6 +18,8 @@ from database.database_utils import (
     save_record
 )
 
+from database.baml_funcs import segment_page_image
+
 from utils import (
     save_json,
     read_json,
@@ -150,7 +152,7 @@ async def get_segments_given_page_image(page_path: ImageStrWithPageRangeFilePath
     page_content = await asyncio.to_thread(read_json, page_path)
     page: ImageStrWithPageRange = tuple(page_content)
     
-    segments = await b.SegmentPageImage(BamlImage.from_base64("image/png", page[0]))
+    segments = await segment_page_image(BamlImage.from_base64("image/png", page[0]))
     
     tmp_file_path: SegmentsWithPageRangeFilePath = f"{page_path_head}/segment_{curr_page_idx}_{next_page_idx}.json"
     item = (

@@ -13,7 +13,7 @@ export default function FlashcardRating({
 }: FlashcardRatingProps) {
   const emojis = [
     { rating: 5, emoji: "💯", label: "Perfect" }, // Perfect
-    { rating: 4, emoji: "🙂", label: "Okay" }, // Okay
+    { rating: 4, emoji: "😐", label: "Okay" }, // Mid
     { rating: 1, emoji: "😩", label: "Terrible" }, // Terrible
     { rating: 6, emoji: "😵‍💫", label: "Confusing" }, // Confusing
     { rating: 7, emoji: "🤬", label: "Inaccurate" }, // Inaccurate

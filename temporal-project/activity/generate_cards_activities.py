@@ -2,8 +2,9 @@ from temporalio import activity
 
 from asyncio.tasks import gather
 from qdrant_client import models
-from functools import reduce
+from functools import reduce, partial
 
+from database.tps_utils import rate_limit
 from database.database_utils import (
     get_record,
     get_all_records,
@@ -20,8 +21,11 @@ from database.database_models import (
     VECTORS_FOR_PB_DATA,
     VectorMetadata,
     FLASHCARDS_STORE, PDF_HIGHLIGHTS,
-    FlashcardsStoreRecord, PdfHighlightsRecord
+    FlashcardsStoreRecord, PdfHighlightsRecord,
+    PDF_SEGMENTS, PdfSegmentsRecord
 )
+
+from database.baml_funcs import generate_flashcards
 
 from baml_client.config import set_log_level
 from baml_client.async_client import types, b
@@ -102,9 +106,10 @@ async def map_from_context_topic(context_topic: list[VectorMetadata]) -> types.T
     for c in context_topic:
         segment_id = c['segment_id']
         if segment_id not in segments_checked:
-            record = await get_record("pdf_segments", segment_id)
+            record: PdfSegmentsRecord = await get_record(PDF_SEGMENTS, segment_id)
             segments.append(types.SegmentRaw(
-                segment_type=record['segment_type'], segment_text=record['segment_text']))
+                segment_type=types.SegmentType(record['segment_type']), 
+                segment_text=record['segment_text']))
             segments_checked.add(segment_id)
 
     return types.TopicSummaryWithSegments(topicSummary=topic_summary, segments=segments)
@@ -171,7 +176,7 @@ async def generate_and_save_flashcards_from_group(group_data: RelatedIdsWithGrou
         topic_summaries_with_segments.append(topic_summ_with_segment_baml)
 
     highlights = list(set(map(lambda x: x['highlight_text'], selected_group)))
-    flashcards = await b.GenerateFlashcardsDetailed(types.StudyInput(topics=topic_summaries_with_segments, highlights=highlights))
+    flashcards = await generate_flashcards(types.StudyInput(topics=topic_summaries_with_segments, highlights=highlights))
 
     # Save to store
     flashcard_save_handle = []

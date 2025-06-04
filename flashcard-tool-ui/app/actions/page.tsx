@@ -4,7 +4,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { FilePlus2, ListChecks } from "lucide-react";
+import { FilePlus2, ListChecks, MessageSquareText } from "lucide-react"; // Added MessageSquareText
 
 export default function ActionPage() {
   const router = useRouter();
@@ -38,8 +38,8 @@ export default function ActionPage() {
               Choose Your Action
             </h1>
             <p className="text-black text-xl font-extralight">
-              Select whether you'd like to create new flashcards or view the
-              status of existing jobs.
+              Select whether you'd like to create new flashcards, view job
+              statuses, or chat with your documents.
             </p>
           </div>
           <div className="w-full max-w-md space-y-4 pt-4">
@@ -53,12 +53,18 @@ export default function ActionPage() {
               Request Flashcards
             </Button>
             <Button
-              variant="outline" // Different variant for visual distinction
-              className="w-full text-xl tracking-tight px-5 py-6 h-auto border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 flex items-center justify-center gap-2"
+              className="w-full text-xl tracking-tight bg-blue-600 hover:bg-blue-700 text-white px-5 py-6 h-auto flex items-center justify-center gap-2"
               onClick={() => router.push("/jobstat")}
             >
               <ListChecks className="h-6 w-6" />
               View Jobs
+            </Button>
+            <Button
+              className="w-full text-xl tracking-tight bg-blue-600 hover:bg-blue-700 text-white px-5 py-6 h-auto flex items-center justify-center gap-2"
+              onClick={() => router.push("/docchat")}
+            >
+              <MessageSquareText className="h-6 w-6" />
+              Document Chat
             </Button>
           </div>
         </div>

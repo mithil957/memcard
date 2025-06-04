@@ -133,6 +133,16 @@ class GenerateFlashcardsWorkflow:
                 retry_policy=few_shot
             )
 
+            if len(highlights) == 0:
+                await workflow.start_activity(
+                    set_job_request_status,
+                    (job_record['id'], "Finished"),
+                    start_to_close_timeout=short_timeout,
+                    retry_policy=one_shot
+                )
+            
+                return "Workflow done - Skipped flashcard generation because no highlights found"
+
             highlight_vector_fetch_handles = []
 
             for highlight in highlights:
@@ -443,6 +453,17 @@ class GenerateFlashcardsWorkflow:
             schedule_to_close_timeout=short_timeout,
             retry_policy=few_shot
         )
+
+        if len(highlights) == 0:
+            await workflow.start_activity(
+                set_job_request_status,
+                (job_record['id'], "Finished"),
+                start_to_close_timeout=short_timeout,
+                retry_policy=one_shot
+            )
+            
+            return "Workflow done - Skipped flashcard generation because no highlights found"
+        
 
         highlight_vector_fetch_handles = []
         for highlight in highlights:

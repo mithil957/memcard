@@ -16,6 +16,7 @@ from database.database_models import (
     PDF_SEGMENTS, PDF_CHUNKS
 )
 
+from database.baml_funcs import chunk_segment
 
 # --- CONFIG ---
 set_log_level("OFF")
@@ -48,7 +49,7 @@ async def chunk_segment_and_save(segment_id: SegmentId):
     instructions = CHUNKING_PROMPT['chunker']['signature']['instructions']
     demo_examples = [types.DemoExampleV2(**d) for d in CHUNKING_PROMPT['chunker']['demos']]
 
-    chunks: list[str] = await b.ChunkSegmentV2(instructions, demo_examples, segment_baml)
+    chunks: list[str] = await chunk_segment(instructions, demo_examples, segment_baml)
 
     # Save chunks
     for indx, chunk in enumerate(chunks):

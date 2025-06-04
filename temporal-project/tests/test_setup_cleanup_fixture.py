@@ -48,9 +48,13 @@ async def test_delete_all_records():
 async def test_reset_vector_db():
     client = await get_qdrant_client()
 
-    await client.recreate_collection(
-        collection_name=VECTORS_FOR_PB_DATA, 
-        vectors_config=models.VectorParams(size=768, distance=models.Distance.DOT),
+    if await client.collection_exists(collection_name=VECTORS_FOR_PB_DATA):
+            return
+
+    await client.create_collection(
+        collection_name=VECTORS_FOR_PB_DATA,
+        vectors_config=models.VectorParams(
+            size=768, distance=models.Distance.DOT),
         quantization_config=models.BinaryQuantization(
             binary=models.BinaryQuantizationConfig(
                 always_ram=False,
@@ -59,27 +63,16 @@ async def test_reset_vector_db():
         on_disk_payload=True
     )
 
-    await client.create_payload_index(
-        collection_name=VECTORS_FOR_PB_DATA,
-        field_name="source_pdf",
-        field_schema=models.PayloadSchemaType.KEYWORD,
-    )
+    payload_indexes_to_create = [
+        ("source_pdf", models.PayloadSchemaType.KEYWORD),
+        ("topic_number", models.PayloadSchemaType.INTEGER),
+        ("segment_index_in_document", models.PayloadSchemaType.INTEGER),
+        ("chunk_index_in_segment", models.PayloadSchemaType.INTEGER)
+    ]
 
-    await client.create_payload_index(
-        collection_name=VECTORS_FOR_PB_DATA,
-        field_name="topic_number",
-        field_schema=models.PayloadSchemaType.INTEGER,
-    )
-
-    
-    await client.create_payload_index(
-        collection_name=VECTORS_FOR_PB_DATA,
-        field_name="segment_index_in_document",
-        field_schema=models.PayloadSchemaType.INTEGER,
-    )
-
-    await client.create_payload_index(
-        collection_name=VECTORS_FOR_PB_DATA,
-        field_name="chunk_index_in_segment",
-        field_schema=models.PayloadSchemaType.INTEGER,
-    )
+    for field_name, field_schema in payload_indexes_to_create:
+        await client.create_payload_index(
+            collection_name=VECTORS_FOR_PB_DATA,
+            field_name=field_name,
+            field_schema=field_schema,
+        )

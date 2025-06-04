@@ -15,6 +15,8 @@ from database.database_models import (
     PDF_TOPICS, PDF_SEGMENTS
 )
 
+from database.baml_funcs import generate_topic_summary, generate_contextual_topic_summary
+
 # ---  CONFIG --- 
 set_log_level("OFF")
 
@@ -48,7 +50,7 @@ async def generate_and_save_base_summary(topic_record: PdfTopicsRecord):
                          segment_text=segment['segment_text'])
         raw_segments_baml.append(raw_segment)
 
-    base_summary = await b.GenerateTopicSummary(raw_segments_baml)
+    base_summary = await generate_topic_summary(raw_segments_baml)
 
     # update the topic record with base summary
     record_with_summary: PdfTopicsRecord = {
@@ -95,7 +97,7 @@ async def generate_and_save_context_summary(topic_record: PdfTopicsRecord):
     next_topic_base_summary = "N/A" if next_topic is None else next_topic["base_summary"]
 
     # get contexutal summary
-    context_summary = await b.GenerateContextualTopicSummary(prev_topic_base_summary, next_topic_base_summary, raw_segments_baml)
+    context_summary = await generate_contextual_topic_summary(prev_topic_base_summary, next_topic_base_summary, raw_segments_baml)
 
     # update the topic record with context summary
     record_with_summary: PdfTopicsRecord = {
