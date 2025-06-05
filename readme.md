@@ -57,5 +57,5 @@
 ### Additional Screenshots
 <img src="./docs/memcard_wizard.png" alt="MemCard Wizard Page" width="500"/>
 <img src="./docs/memcard_jobs.png" alt="MemCard Job Page" width="500"/>
-<img src="./docs/memcard_rating.png" alt="MemCard Rating Page" width="500"/>
+<img src="./docs/memcard_flashcard_view.png" alt="MemCard Rating Page" width="500"/>
 <img src="./docs/memcard_docchat.png" alt="MemCard Document Chat Page" width="500"/>
