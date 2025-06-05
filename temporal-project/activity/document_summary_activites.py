@@ -28,15 +28,7 @@ async def generate_and_save_document_summary(source_pdf_id: str) -> PdfSummaryRe
     })
 
     summaries = [record["context_summary"] for record in records]
-
-    # TODO - should prob improve this part
-    if sum(map(lambda x: len(x), summaries)) >= 5 * 1e5:
-        document_summary = "Too many tokens to generate a summary for, perform 2nd order summary"
-    else:
-        try:
-            document_summary = await generate_document_summary(summaries)
-        except Exception as e:
-            document_summary = "Errored out"
+    document_summary = await generate_document_summary(summaries)
 
     document_summary_record: PdfSummaryRecord = {
         "document_summary": document_summary,

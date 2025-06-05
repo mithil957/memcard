@@ -20,21 +20,21 @@ from activity.pdf_segmentation_activites import (
     save_segments_to_db,
 )
 from activity.segment_chunking_activites import (
-    fetch_segment_ids,
-    chunk_segment_and_save
+    fetch_segment_ids_and_save_batch,
+    fetch_segment_batch_and_chunk,
 )
 
 from activity.topic_bounds_activites import (
-    construct_segment_batches,
+    fetch_segment_info_and_save_batch,
     get_topic_bounds_for_batch,
     get_last_segment_index_of_document,
     reduced_topic_bounds_and_save,
 )
 
 from activity.topic_summaries_activites import (
-    get_topic_bounds,
-    generate_and_save_base_summary,
-    generate_and_save_context_summary
+    fetch_topic_bounds_and_save_batch,
+    fetch_topic_records_batch_and_generate_base_summaries,
+    fetch_topic_records_batch_and_generate_context_summaries
 )
 
 from activity.document_summary_activites import (
@@ -42,8 +42,8 @@ from activity.document_summary_activites import (
 )
 
 from activity.data_vectorization_activites import (
-    get_chunk_id_batches,
-    construct_context_vector_and_save
+    fetch_chunk_ids_and_save_batch,
+    process_chunk_batch
 )
 
 from activity.generate_cards_activities import (
@@ -82,22 +82,22 @@ async def test_generate_flashcards_workflow():
                 get_segments_given_page_image,
                 save_segments_to_db,
                 # Chunking
-                fetch_segment_ids,
-                chunk_segment_and_save,
+                fetch_segment_ids_and_save_batch,
+                fetch_segment_batch_and_chunk,
                 # Topic bounds
-                construct_segment_batches,
+                fetch_segment_info_and_save_batch,
                 get_topic_bounds_for_batch,
                 get_last_segment_index_of_document,
                 reduced_topic_bounds_and_save,
                 # Topic summaries
-                get_topic_bounds,
-                generate_and_save_base_summary,
-                generate_and_save_context_summary,
+                fetch_topic_bounds_and_save_batch,
+                fetch_topic_records_batch_and_generate_base_summaries,
+                fetch_topic_records_batch_and_generate_context_summaries,
                 # Document summaries
                 generate_and_save_document_summary,
                 # Vectorization
-                get_chunk_id_batches,
-                construct_context_vector_and_save,
+                fetch_chunk_ids_and_save_batch,
+                process_chunk_batch,
                 # Flashcard generation
                 get_all_highlights,
                 get_matches_for_highlight,

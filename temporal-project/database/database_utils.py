@@ -4,6 +4,7 @@ from async_lru import alru_cache
 from typing import Any
 from urllib.parse import quote
 from async_lru import alru_cache
+from database.tps_utils import rate_limit
 
 import time
 import asyncio
@@ -77,7 +78,7 @@ async def get_all_records[T](collection_name: str, options: dict[str, Any] = {})
 
     return all_records  # type: ignore
 
-
+@rate_limit(key="pocketbase", tps=200)
 async def get_first_matching_record[T](collection_name: str, options: dict[str, Any] = {}) -> T | None:
     async with aiohttp.ClientSession() as session:
         params = {

@@ -1,5 +1,6 @@
 from temporalio import activity
-
+from asyncio.tasks import gather
+import os
 import asyncio
 from qdrant_client import models
 import uuid
@@ -18,14 +19,21 @@ from database.vector_database_utils import (
 from database.database_models import (
     VECTORS_FOR_PB_DATA,
     VectorMetadata,
-    PDF_CHUNKS, PDF_SEGMENTS, PDF_TOPICS,
-    PdfChunksRecord, PdfSegmentsRecord, PdfTopicsRecord
+    PDF_CHUNKS, PDF_SEGMENTS, PDF_TOPICS, JOB_REQUESTS,
+    PdfChunksRecord, PdfSegmentsRecord, PdfTopicsRecord, JobRequestsRecord
+)
+
+from utils import (
+    save_json, read_json, remove_file
 )
 
 
 # --- HELPFUL TYPES ---
 ChunkId = str
-ChunkBatch = list[ChunkId]
+ChunkIdsBatchFilePath = str
+# 100 is the max the current embedding API can handle in one call
+MAX_BATCH_SIZE_FOR_EMBEDDING = 100 
+BATCH_SIZE = 250
 
 
 # --- Helper Functions ---
@@ -59,24 +67,7 @@ async def prepare_vector_metadata_for_chunk(chunk_id: str) -> VectorMetadata:
     return vec_metadata
 
 
-# --- Activites ---
-@activity.defn
-async def get_chunk_id_batches(source_pdf_id: str) -> list[ChunkBatch]:
-    chunks: list[PdfChunksRecord] = await get_all_records(PDF_CHUNKS, options={
-        "filter": f"source_pdf='{source_pdf_id}'",
-        "fields": "id"
-    })
-
-    batches: list[ChunkBatch] = []
-    for i in range(0, len(chunks), 100):
-        current_batch: list[ChunkId] = [chunk['id'] for chunk in chunks[i:i+100]]
-        batches.append(current_batch)
-    
-    return batches
-
-
-@activity.defn
-async def construct_context_vector_and_save(chunk_ids: ChunkBatch):
+async def construct_context_vector_and_save(chunk_ids: list[ChunkId]):
     activity.logger.info(f"Starting vector creation and save for chunk batch - {chunk_ids[0]}")
 
     # Create the vector metadata for each chunk
@@ -117,3 +108,40 @@ async def construct_context_vector_and_save(chunk_ids: ChunkBatch):
 
     if operation.status != 'completed':
         raise Exception(f'Failed to save vector to DB - {chunk_id}')
+
+
+# --- Activites ---
+@activity.defn
+async def fetch_chunk_ids_and_save_batch(job_record: JobRequestsRecord) -> list[ChunkIdsBatchFilePath]:
+    source_pdf_id = job_record['source_pdf']
+    chunks: list[PdfChunksRecord] = await get_all_records(PDF_CHUNKS, options={
+        "filter": f"source_pdf='{source_pdf_id}'",
+        "fields": "id"
+    })
+
+    batch_file_paths: list[ChunkIdsBatchFilePath] = []
+    base_job_temp_dir = f"/tmp/{job_record['id']}"
+    await asyncio.to_thread(os.makedirs, base_job_temp_dir, exist_ok=True)
+
+    for idx in range(0, len(chunks), BATCH_SIZE):
+        current_batch: list[ChunkId] = [chunk['id'] 
+                                        for chunk in chunks[idx:idx+BATCH_SIZE]]
+        filename_suffix = f"vector_chunk_{idx}_{idx + BATCH_SIZE}.json"
+        tmp_file_path = os.path.join(base_job_temp_dir, filename_suffix)
+        await asyncio.to_thread(save_json, tmp_file_path, current_batch)
+        batch_file_paths.append(tmp_file_path)
+    
+    return batch_file_paths
+
+
+@activity.defn
+async def process_chunk_batch(chunk_ids_batch_path: ChunkIdsBatchFilePath):
+    chunk_ids: list[ChunkId] = await asyncio.to_thread(read_json, chunk_ids_batch_path)
+    
+    context_vector_batch_handles = []
+    for idx in range(0, len(chunk_ids), MAX_BATCH_SIZE_FOR_EMBEDDING):
+        current_batch_of_chunk_ids = chunk_ids[idx: idx + MAX_BATCH_SIZE_FOR_EMBEDDING]
+        handle = construct_context_vector_and_save(current_batch_of_chunk_ids)
+        context_vector_batch_handles.append(handle)
+
+    await gather(*context_vector_batch_handles)

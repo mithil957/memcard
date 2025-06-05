@@ -77,6 +77,8 @@ services:
     ports:
       - "7233:7233"
       - "8233:8233"
+    volumes:
+      - ./temporal-project/dynamicconfig.yaml:/etc/temporal/config/dynamicconfig.yaml 
     environment:
       - DB=postgres12
       - SKIP_SCHEMA_SETUP=false
@@ -87,6 +89,7 @@ services:
       - POSTGRES_SEEDS=postgresql           
       - POSTGRES_USER=${POSTGRES_USER:-temporal}
       - POSTGRES_PWD=${POSTGRES_PASSWORD:-temporal}
+      - DYNAMIC_CONFIG_FILE_PATH=/etc/temporal/config/dynamicconfig.yaml
 
     depends_on:
       postgresql:

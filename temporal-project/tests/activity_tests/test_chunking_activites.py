@@ -1,12 +1,15 @@
 import pytest
 from temporalio.testing import ActivityEnvironment
 from activity.segment_chunking_activites import (
-    fetch_segment_ids,
-    chunk_segment_and_save
+    fetch_segment_ids_and_save_batch,
+    fetch_segment_batch_and_chunk,
 )
-from database.database_models import PDF_CHUNKS
+from database.database_models import (
+    PDF_CHUNKS, JOB_REQUESTS, JobRequestsRecord
+)
 from database.database_utils import (
-    get_all_records
+    get_all_records,
+    get_record
 )
 from asyncio.tasks import gather
 from tests.test_setup_cleanup_fixture import (
@@ -17,19 +20,17 @@ from tests.test_setup_cleanup_fixture import (
 @pytest.mark.asyncio
 async def test_chunking_activites(run_around_tests):
     env = ActivityEnvironment()
-    segment_ids = await env.run(fetch_segment_ids, "5u67g97440v3x03")
-    assert len(segment_ids) != 0
+    job_record: JobRequestsRecord = await get_record(JOB_REQUESTS, "k2j4q17558q9b7d")
 
-    handles = []
-    for segment_id in segment_ids:
-        handle = env.run(chunk_segment_and_save, segment_id)
-        handles.append(handle)
-    
-    await gather(*handles)
+    segment_batch_file_paths = await env.run(fetch_segment_ids_and_save_batch, job_record)
+    assert len(segment_batch_file_paths) != 0
 
-    for segment_id in segment_ids:
-        records = await get_all_records(PDF_CHUNKS, options={
-            "filter": f"segment='{segment_id}'"
-        })
-    
-        assert len(records) != 0
+    for segment_batch_path in segment_batch_file_paths:
+        segment_ids_for_batch = await env.run(fetch_segment_batch_and_chunk, segment_batch_path)
+
+        for segment_id in segment_ids_for_batch:
+            records = await get_all_records(PDF_CHUNKS, options={
+                "filter": f"segment='{segment_id}'"
+            })
+        
+            assert len(records) != 0

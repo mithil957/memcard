@@ -5,7 +5,7 @@ from typing import Literal
 
 TPS_STATE = {}
 
-TpsKey = Literal["embedding", "baml"]
+TpsKey = Literal["embedding", "baml", "pocketbase"]
 
 def rate_limit(key: TpsKey, tps: int):
     if tps <= 0:

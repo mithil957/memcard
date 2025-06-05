@@ -116,19 +116,6 @@ async def extract_and_save_highlights(pdf_id_pair: UploadedPdfIdAndProcessedPdfI
                     if len(highlight_text.strip()) != 0:
                         highlights.append(ExtractedHighlight(highlight_text.strip(), page_num))
 
-    # Save highlights
-    if len(highlights) == 0:
-        try:
-            saved_record: PdfHighlightsRecord = await save_record(PDF_HIGHLIGHTS, {
-                "user_pdf": pdf_id_to_save_on,
-                "text": "N/A",
-                "page_number": 0
-            })
-            activity.logger.info(f"No highlights to save for PDF record ID: {saved_record['id']}")
-        except Exception as e:
-            activity.logger.error(f"Error saving EMPTY highlight - {pdf_id_to_save_on} - {e}")
-
-
     for highlight in highlights:
         try:
             saved_record: PdfHighlightsRecord = await save_record(PDF_HIGHLIGHTS, {

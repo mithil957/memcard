@@ -2,12 +2,19 @@ from temporalio import activity
 from baml_client.config import set_log_level
 from baml_client import types
 from baml_client.async_client import b
+from baml_py.errors import BamlClientError
 
+import asyncio
 from asyncio.tasks import gather
+import os
+
+from utils import (
+    save_json, read_json, remove_file
+)
 
 from database.database_models import (
-    PdfSegmentsRecord, PdfTopicsRecord,
-    PDF_SEGMENTS, PDF_TOPICS
+    PdfSegmentsRecord, PdfTopicsRecord, JobRequestsRecord,
+    PDF_SEGMENTS, PDF_TOPICS, JOB_REQUESTS
 )
 
 from database.database_utils import (
@@ -21,6 +28,8 @@ from database.baml_funcs import identify_topic_bounds
 
 # --- CONFIG ---
 set_log_level("OFF")
+BATCH_SIZE = 60
+SLIDE_SIZE = 30
 
 # --- Helpful Types ---
 SegmentId = str
@@ -28,31 +37,44 @@ SegmentIndx = int
 IsLastSegment = bool
 SegmentInfo = tuple[SegmentId, SegmentIndx]
 SegmentBatch = list[SegmentInfo]
+FilePathForSegmentBatch = str
 TopicBoundary = int
 TopicBoundsWithSourcePDF = tuple[list[TopicBoundary], str]
 
 # --- Activites ---
 @activity.defn
-async def construct_segment_batches(source_pdf_id: str) -> list[SegmentBatch]:
+async def fetch_segment_info_and_save_batch(job_record: JobRequestsRecord) -> list[FilePathForSegmentBatch]:
+    source_pdf_id = job_record['source_pdf']
     records: list[PdfSegmentsRecord] = await get_all_records(PDF_SEGMENTS, options={
         "filter": f"source_pdf='{source_pdf_id}'",
         "fields": "id,segment_index_in_document",
         "sort": "segment_index_in_document"
     })
 
-    segment_infos: list[SegmentInfo] = [(record['id'], record['segment_index_in_document'])
-           for record in records]
+    segment_infos: list[SegmentInfo] = [
+        (record['id'], record['segment_index_in_document'])
+        for record in records
+    ]
 
+    base_job_temp_dir = f"/tmp/{job_record['id']}"
+    await asyncio.to_thread(os.makedirs, base_job_temp_dir, exist_ok=True)
+    
     # Turn the ids into batches by sliding over them using a window, (slide by 20 & collect 40)
-    batches: list[SegmentBatch] = []
-    for i in range(0, len(segment_infos), 20):
-        batches.append(segment_infos[i: i+40])
+    file_paths_for_segment_batches: list[FilePathForSegmentBatch] = []
+    for i in range(0, len(segment_infos), SLIDE_SIZE):
+        segment_info_batch = segment_infos[i: i + BATCH_SIZE]
+        filename_suffix = f"topic_bounds_{i}_{i + BATCH_SIZE}.json"
+        tmp_file_path = os.path.join(base_job_temp_dir, filename_suffix)
+        await asyncio.to_thread(save_json, tmp_file_path, segment_info_batch)
+        file_paths_for_segment_batches.append(tmp_file_path)
 
-    return batches
+    return file_paths_for_segment_batches
 
 
 @activity.defn
-async def get_topic_bounds_for_batch(segment_batch: SegmentBatch) -> list[TopicBoundary]:
+async def get_topic_bounds_for_batch(segment_batch_file_path: FilePathForSegmentBatch) -> list[TopicBoundary]:
+    segment_batch = await asyncio.to_thread(read_json, segment_batch_file_path)
+    
     # Fetch segments
     pdf_segment_fetch_handles = []
     for segment_id, _ in segment_batch:
@@ -78,7 +100,7 @@ async def get_topic_bounds_for_batch(segment_batch: SegmentBatch) -> list[TopicB
         # Calculate topic bounds with offset using the index of the first segment
         segment_index = pdf_segment_records[0]["segment_index_in_document"]
         return list(map(lambda bound: bound + segment_index, topic_bounds))
-    except Exception as e:
+    except BamlClientError as e:
         # TODO add more robust default option
         # when API call fails
         return list(map(lambda bound: bound + segment_index, [0, len(segments_baml)]))
@@ -116,6 +138,5 @@ async def reduced_topic_bounds_and_save(topic_bounds_with_pdf_id: TopicBoundsWit
         pdf_topic_insert_handles.append(handle)
         topic_number += 1
 
-    activity.logger.info(
-        f"Trying to save all topic records - {len(pdf_topic_insert_handles)}")
+    activity.logger.info(f"Trying to save all topic records - {len(pdf_topic_insert_handles)}")
     await gather(*pdf_topic_insert_handles)

@@ -8,6 +8,7 @@ import google.genai as genai
 from google.genai import types as genai_types
 from dataclasses import dataclass
 from database.tps_utils import rate_limit
+from typing import Any
 
 import asyncio
 
@@ -201,3 +202,32 @@ async def traverse_document_to_coordinate(source_pdf: str, start: DocumentCoordi
             f"Max depth reached without finding coordinate. Last coordinate - {current_coordinate} ")
 
     return results
+
+
+async def get_matching_records(collection_name: str, key_name: str, key_value: Any, limit = 200) -> list[models.Record]:
+    client = await get_qdrant_client()
+    result = await client.scroll(
+        collection_name=collection_name,
+        scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key=key_name,
+                        match=models.MatchValue(value=key_value)
+                    )
+                ]
+            ),
+        limit=limit
+    )
+
+    records, _ = result
+    return records
+
+
+async def delete_records_by_id(collection_name: str, record_ids: list[Any]):
+    client = await get_qdrant_client()
+    await client.delete(
+        collection_name=collection_name,
+            points_selector=models.PointIdsList(
+            points=record_ids
+        )
+    )
