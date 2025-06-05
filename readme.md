@@ -1,5 +1,5 @@
 # MemCard
-- Take a PDF and mark it with highlights. Upload that PDF to this tool and you get flashcards. Rate the flashcards and then export them to Obsidian or Anki. All data is local and stays on your computer.
+- Take a PDF and mark it with highlights. Upload that PDF to this tool and you get flashcards. Rate the flashcards and then export them to CSV file. All data is local and stays on your computer.
     - The ratings for the cards will be used to improve the quality of the generated flashcards. This feature will be added in future.
     - The generated cards likely won't be high quality but they can serve as a starting point.
     
@@ -56,6 +56,6 @@
 
 ### Additional Screenshots
 <img src="./docs/memcard_wizard.png" alt="MemCard Wizard Page" width="500"/>
-<img src="./docs/memcard_jobs.png" alt="MemCard Wizard Page" width="500"/>
-<img src="./docs/memcard_rating.png" alt="MemCard Wizard Page" width="500"/>
-
+<img src="./docs/memcard_jobs.png" alt="MemCard Job Page" width="500"/>
+<img src="./docs/memcard_rating.png" alt="MemCard Rating Page" width="500"/>
+<img src="./docs/memcard_docchat.png" alt="MemCard Document Chat Page" width="500"/>
