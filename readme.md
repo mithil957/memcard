@@ -2,6 +2,7 @@
 - Take a PDF and mark it with highlights. Upload that PDF to this tool and you get flashcards. Rate the flashcards and then export them to CSV file. All data is local and stays on your computer.
     - The ratings for the cards will be used to improve the quality of the generated flashcards. This feature will be added in future.
     - The generated cards likely won't be high quality but they can serve as a starting point.
+    - Costs roughly $0.10 per 100 pages due to API calls (if using the default LLM, which is Flash 2)
     
 
 <img src="./docs/memcard_landing_page.png" alt="MemCard Hero Page" width="600"/>
