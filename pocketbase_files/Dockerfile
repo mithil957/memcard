@@ -1,6 +1,6 @@
-FROM golang:1.24-alpine
+FROM golang:1.24-bookworm
 
-RUN apk add --no-cache git build-base
+RUN apt-get update && apt-get install -y git build-essential
 
 WORKDIR /app
 
